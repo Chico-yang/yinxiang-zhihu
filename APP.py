@@ -737,14 +737,24 @@ def main():
                     st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ====== B站视频嵌入 ======
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.markdown("#### 🎬 反诈宣传视频")
-    import streamlit.components.v1 as components
-    video_url = "https://www.bilibili.com/video/BV1vN4y1N7CG/"
-    components.iframe(video_url, height=500, scrolling=True)
-    st.caption("📺 视频来源：B站 · 反诈宣传")
-    st.markdown('</div>', unsafe_allow_html=True)
+
+    # ====== B站视频自动循环播放 ======
+    st.markdown('''
+    <div class="glass-card">
+        <h4>🎬 反诈宣传视频</h4>
+        <iframe 
+            src="https://player.bilibili.com/player.html?bvid=BV1vN4y1N7CG&autoplay=1&loop=1" 
+            scrolling="no" 
+            border="0" 
+            frameborder="no" 
+            framespacing="0" 
+            allowfullscreen="true"
+            allow="autoplay; encrypted-media; fullscreen"
+            style="width:100%; height:500px; border-radius:20px; background:#000;">
+        </iframe>
+        <p style="font-size:20px; color:#8A7A6A; margin-top:10px;">📺 视频来源：B站 · 反诈宣传</p>
+    </div>
+    ''', unsafe_allow_html=True)
 
     # ====== 骗局类型 ======
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
