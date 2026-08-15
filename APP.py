@@ -2,21 +2,18 @@
 """
 银乡智护 - 农村老年金融反诈AI助手（国赛至尊版）
 视觉：动态渐变背景 + 毛玻璃 + 三重动画
-功能：风险识别 + 记账 + 求助 + 闯关 + 视频 + 头条 + 日历
-适老：28px基准字体 + 一键超大字体
+功能：风险识别 + 记账 + 求助 + 闯关 + 视频 + 骗局类型 + 顺口溜 + 知识库
+适老：36px基准字体 + 64px超大字体（2倍）
+语音：所有功能按钮点击均有语音反馈
 """
 
 import streamlit as st
 import json
 import os
 import random
-from datetime import datetime, timedelta
+from datetime import datetime
 import pandas as pd
 import plotly.express as px
-from PIL import Image, ImageDraw, ImageFont
-import io
-import base64
-import time
 
 # ==================== 页面配置 ====================
 st.set_page_config(
@@ -31,39 +28,60 @@ if "section" not in st.session_state:
     st.session_state.section = "detect"
 if "font_size" not in st.session_state:
     st.session_state.font_size = "large"
-if "page_loaded" not in st.session_state:
-    st.session_state.page_loaded = False
 
-# ==================== 超大字体CSS（动态） ====================
+# ==================== 超大字体CSS ====================
 def get_font_size_css():
     if st.session_state.font_size == "xlarge":
         return """
         html, body, .stApp, div, p, span, li, label, .stMarkdown {
-            font-size: 34px !important;
-            line-height: 2.0 !important;
+            font-size: 64px !important;
+            line-height: 2.4 !important;
         }
-        h1 { font-size: 64px !important; }
-        h2 { font-size: 48px !important; }
-        h3 { font-size: 40px !important; }
-        .stButton > button { font-size: 40px !important; min-height: 100px !important; }
+        h1 { font-size: 96px !important; }
+        h2 { font-size: 76px !important; }
+        h3 { font-size: 64px !important; }
+        .stButton > button { font-size: 64px !important; min-height: 140px !important; padding: 32px 48px !important; }
+        .stTextArea > div > div > textarea,
+        .stTextInput > div > div > input,
+        .stNumberInput > div > div > input {
+            font-size: 56px !important; min-height: 120px !important; padding: 32px 40px !important;
+        }
+        .hero-left .greeting { font-size: 72px !important; }
+        .hero-left .greeting span { font-size: 64px !important; }
+        .hero-left .daily-verse { font-size: 48px !important; }
+        .hero-stat .num { font-size: 68px !important; }
+        .hero-stat .lbl { font-size: 36px !important; }
+        .glass-card { padding: 48px 44px !important; border-radius: 64px !important; }
+        .chat-bubble { font-size: 56px !important; padding: 36px 44px !important; }
+        .fraud-type .title { font-size: 48px !important; }
+        .fraud-type .desc { font-size: 40px !important; }
         """
     else:
         return """
         html, body, .stApp, div, p, span, li, label, .stMarkdown {
-            font-size: 28px !important;
-            line-height: 1.9 !important;
+            font-size: 36px !important;
+            line-height: 2.0 !important;
         }
-        h1 { font-size: 56px !important; }
-        h2 { font-size: 42px !important; }
-        h3 { font-size: 34px !important; }
-        .stButton > button { font-size: 38px !important; min-height: 90px !important; }
+        h1 { font-size: 68px !important; }
+        h2 { font-size: 54px !important; }
+        h3 { font-size: 44px !important; }
+        .stButton > button { font-size: 40px !important; min-height: 100px !important; padding: 24px 40px !important; }
+        .stTextArea > div > div > textarea,
+        .stTextInput > div > div > input,
+        .stNumberInput > div > div > input {
+            font-size: 36px !important; min-height: 90px !important; padding: 24px 32px !important;
+        }
+        .hero-left .greeting { font-size: 52px !important; }
+        .hero-left .greeting span { font-size: 46px !important; }
+        .hero-left .daily-verse { font-size: 34px !important; }
+        .hero-stat .num { font-size: 48px !important; }
+        .hero-stat .lbl { font-size: 28px !important; }
         """
 
 def load_custom_css():
     font_css = get_font_size_css()
     st.markdown(f"""
     <style>
-        /* ===== 动态渐变背景 ===== */
         .stApp {{
             background: linear-gradient(-45deg, #FCF6F0, #F8EFE7, #F5E8DC, #FCF6F0);
             background-size: 400% 400%;
@@ -74,38 +92,31 @@ def load_custom_css():
             50% {{ background-position: 100% 50%; }}
             100% {{ background-position: 0% 50%; }}
         }}
-
-        /* ===== 页面入场动画 ===== */
         .app-content {{
-            animation: fadeSlideUp 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            animation: fadeSlideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
             opacity: 0;
-            transform: translateY(40px);
+            transform: translateY(30px);
         }}
         @keyframes fadeSlideUp {{
-            0% {{ opacity: 0; transform: translateY(40px); }}
+            0% {{ opacity: 0; transform: translateY(30px); }}
             100% {{ opacity: 1; transform: translateY(0); }}
         }}
-
-        /* ===== 毛玻璃卡片 ===== */
         .glass-card {{
-            background: rgba(255, 252, 248, 0.75);
+            background: rgba(255, 252, 248, 0.78);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border-radius: 48px;
             padding: 36px 34px;
-            box-shadow: 0 8px 40px rgba(160, 130, 100, 0.08), 0 2px 12px rgba(160, 130, 100, 0.04);
+            box-shadow: 0 8px 40px rgba(160, 130, 100, 0.08);
             border: 1px solid rgba(255, 248, 240, 0.5);
             margin-bottom: 28px;
             transition: transform 0.3s ease, box-shadow 0.4s ease;
         }}
         .glass-card:hover {{
-            transform: translateY(-8px) scale(1.005);
+            transform: translateY(-6px);
             box-shadow: 0 20px 60px rgba(160, 130, 100, 0.15);
         }}
-
-        /* ===== 超大按钮 ===== */
         .stButton > button {{
-            padding: 24px 44px !important;
             border-radius: 80px !important;
             font-weight: 800 !important;
             width: 100% !important;
@@ -118,34 +129,24 @@ def load_custom_css():
             cursor: pointer;
         }}
         .stButton > button:hover {{
-            transform: scale(1.05) translateY(-4px);
+            transform: scale(1.04) translateY(-4px);
             box-shadow: 0 16px 56px rgba(212, 165, 116, 0.40);
         }}
         .stButton > button:active {{
             transform: scale(0.96);
         }}
-        .btn-detect {{ background: linear-gradient(145deg, #6C8EBF, #5A7AA8) !important; }}
-        .btn-account {{ background: linear-gradient(145deg, #82BE96, #6AAA7E) !important; }}
-        .btn-help {{ background: linear-gradient(145deg, #E8A87C, #D4946A) !important; }}
-        .btn-danger {{ background: linear-gradient(145deg, #D97070, #C95A5A) !important; }}
-
-        /* ===== 输入框 ===== */
         .stTextArea > div > div > textarea,
         .stTextInput > div > div > input,
         .stNumberInput > div > div > input {{
-            padding: 24px 32px !important;
             border-radius: 36px !important;
             border: 3px solid #E8DDD0 !important;
             background: rgba(255, 252, 248, 0.7) !important;
-            min-height: 80px !important;
             color: #2C3E50 !important;
         }}
         .stTextArea > div > div > textarea:focus {{
             border-color: #D4A574 !important;
             box-shadow: 0 0 0 6px rgba(212, 165, 116, 0.15) !important;
         }}
-
-        /* ===== 顶部横幅 ===== */
         .hero-banner {{
             background: rgba(255, 255, 255, 0.6);
             backdrop-filter: blur(20px);
@@ -186,8 +187,6 @@ def load_custom_css():
         .hero-stat .lbl {{
             color: #6A5A4A;
         }}
-
-        /* ===== 聊天气泡 ===== */
         .chat-bubble {{
             padding: 28px 36px;
             border-radius: 36px 36px 36px 12px;
@@ -207,8 +206,6 @@ def load_custom_css():
             background: #FEF6E6;
             border-left: 12px solid #E8A87C;
         }}
-
-        /* ===== 骗局类型卡片 ===== */
         .fraud-type {{
             background: rgba(255, 255, 255, 0.5);
             border-radius: 28px;
@@ -228,14 +225,10 @@ def load_custom_css():
         .fraud-type .desc {{
             color: #5A4A3A;
         }}
-
-        /* ===== 响应式 ===== */
         @media screen and (max-width: 768px) {{
             .hero-banner {{ flex-direction: column; text-align: center; padding: 28px; }}
             .hero-right {{ justify-content: center; }}
         }}
-
-        /* ===== 底部 ===== */
         .footer {{
             text-align: center;
             padding: 28px 0 16px;
@@ -244,8 +237,6 @@ def load_custom_css():
             color: #8A7A6A;
         }}
         .footer p {{ color: #8A7A6A !important; }}
-
-        /* ===== 字体大小覆盖 ===== */
         {font_css}
     </style>
     """, unsafe_allow_html=True)
@@ -287,11 +278,13 @@ def save_profile(data):
 
 # ==================== 反诈数据 ====================
 FRAUD_KEYWORDS = {
-    "冒充公检法": ["涉嫌洗钱", "安全账户", "通缉令", "账户冻结", "保密协议"],
-    "投资理财": ["数字货币", "稳赚不赔", "保本高息", "内部渠道", "养老投资"],
-    "技术操控": ["共享屏幕", "远程控制", "屏幕录像", "验证身份"],
-    "紧急恐吓": ["自动扣费", "征信拉黑", "子女被绑架", "出车祸"],
-    "农村常见": ["保健品", "特效药", "免费体检", "以房养老", "扶贫款"]
+    "冒充公检法": ["涉嫌洗钱", "安全账户", "通缉令", "账户冻结", "保密协议", "配合调查", "刑事拘捕"],
+    "投资理财": ["数字货币", "稳赚不赔", "保本高息", "内部渠道", "专家带单", "养老投资", "解冻金", "高回报"],
+    "技术操控": ["共享屏幕", "远程控制", "屏幕录像", "验证身份", "下载软件"],
+    "紧急恐吓": ["自动扣费", "征信拉黑", "子女被绑架", "出车祸", "包裹藏毒", "健康码异常"],
+    "情感诱导": ["刷单兼职", "垫付返利", "网络交友", "博彩漏洞", "免费领"],
+    "农村常见": ["保健品", "特效药", "免费体检", "专家讲座", "以房养老", "扶贫款", "助农补贴", "神药"],
+    "通用高危": ["转账", "验证码", "银行卡", "密码", "保证金", "手续费", "贷款", "中奖", "红包"]
 }
 
 CASES = [
@@ -315,6 +308,7 @@ QUIZZES = [
 
 # ==================== 辅助函数 ====================
 def detect_risk(text):
+    """检测诈骗风险 - 高灵敏度：匹配到任何关键词即判高危"""
     if not text or not text.strip():
         return "safe", [], []
     text_lower = text.lower()
@@ -327,10 +321,8 @@ def detect_risk(text):
                 if cat not in categories:
                     categories.append(cat)
     matched = list(set(matched))
-    if len(matched) >= 3:
+    if len(matched) >= 1:
         return "high", matched, categories
-    elif len(matched) >= 1:
-        return "medium", matched, categories
     else:
         return "safe", matched, categories
 
@@ -358,9 +350,6 @@ def get_greeting():
 
 # ==================== 主界面 ====================
 def main():
-    if not st.session_state.page_loaded:
-        st.session_state.page_loaded = True
-
     load_custom_css()
     account = load_account()
     records = account.get("records", [])
@@ -373,11 +362,7 @@ def main():
     col_font1, col_font2 = st.columns([6, 1])
     with col_font2:
         if st.button("🔍 超大字体", key="toggle_font"):
-            if st.session_state.font_size == "large":
-                st.session_state.font_size = "xlarge"
-            else:
-                st.session_state.font_size = "large"
-            st.rerun()
+            st.session_state.font_size = "xlarge" if st.session_state.font_size == "large" else "large"
 
     # ====== 顶部横幅 ======
     greeting = get_greeting()
@@ -393,16 +378,16 @@ def main():
     st.markdown(f"""
     <div class="hero-banner">
         <div class="hero-left">
-            <div class="greeting" style="font-size:48px;">
-                🏡 {greeting}，<span style="font-size:44px;">爷爷奶奶</span>
-                <span style="font-size:32px; color:#8A7A6A; margin-left:16px;">⏰ {datetime.now().strftime('%H:%M')}</span>
+            <div class="greeting">
+                🏡 {greeting}，<span>爷爷奶奶</span>
+                <span style="color:#8A7A6A; margin-left:16px;">⏰ {datetime.now().strftime('%H:%M')}</span>
             </div>
-            <div class="daily-verse" style="font-size:30px;">{daily_verse}</div>
+            <div class="daily-verse">{daily_verse}</div>
         </div>
         <div class="hero-right" style="display:flex; gap:28px;">
-            <div class="hero-stat"><div class="num" style="font-size:44px;">❤️ {profile.get('checkin_days', 0)}</div><div class="lbl" style="font-size:22px;">守护天数</div></div>
-            <div class="hero-stat"><div class="num" style="font-size:44px;">🏅 {profile.get('points', 0)}</div><div class="lbl" style="font-size:22px;">积分</div></div>
-            <div class="hero-stat"><div class="num" style="font-size:44px;">🛡️ {profile.get('risk_detected', 0)}</div><div class="lbl" style="font-size:22px;">识别风险</div></div>
+            <div class="hero-stat"><div class="num">❤️ {profile.get('checkin_days', 0)}</div><div class="lbl">守护天数</div></div>
+            <div class="hero-stat"><div class="num">🏅 {profile.get('points', 0)}</div><div class="lbl">积分</div></div>
+            <div class="hero-stat"><div class="num">🛡️ {profile.get('risk_detected', 0)}</div><div class="lbl">识别风险</div></div>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -422,40 +407,39 @@ def main():
                 profile['last_checkin'] = today
                 save_profile(profile)
                 st.success("🎉 签到成功！+5积分")
-                st.rerun()
         st.markdown(f"🏅 累计签到 **{profile.get('checkin_days', 0)}** 天  |  积分 **{profile.get('points', 0)}**", unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
     with col_c2:
         st.markdown('<div class="glass-card" style="text-align:center;">', unsafe_allow_html=True)
         st.markdown("#### 🎖️ 徽章")
         if profile.get('checkin_days', 0) >= 7:
-            st.markdown('<span style="background:#F4B942;padding:8px 24px;border-radius:60px;color:white;font-size:30px;">🌟 坚持之星</span>', unsafe_allow_html=True)
+            st.markdown('<span style="background:#F4B942;padding:8px 24px;border-radius:60px;color:white;">🌟 坚持之星</span>', unsafe_allow_html=True)
         if profile.get('quiz_completed', 0) >= 2:
-            st.markdown('<span style="background:#82BE96;padding:8px 24px;border-radius:60px;color:white;font-size:30px;">🧠 反诈达人</span>', unsafe_allow_html=True)
+            st.markdown('<span style="background:#82BE96;padding:8px 24px;border-radius:60px;color:white;">🧠 反诈达人</span>', unsafe_allow_html=True)
         if profile.get('risk_detected', 0) >= 5:
-            st.markdown('<span style="background:#D97070;padding:8px 24px;border-radius:60px;color:white;font-size:30px;">🛡️ 守护卫士</span>', unsafe_allow_html=True)
+            st.markdown('<span style="background:#D97070;padding:8px 24px;border-radius:60px;color:white;">🛡️ 守护卫士</span>', unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # ====== 操作台 ======
+    # ====== 操作台（四个功能按钮都加上了语音播报） ======
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.markdown("### 🎯 我该做什么？—— 点一下就行")
     col_act1, col_act2, col_act3, col_act4 = st.columns(4)
     with col_act1:
         if st.button("📱 读短信/聊天", key="act_detect"):
             st.session_state.section = "detect"
-            st.rerun()
+            generate_speech("好的，我来帮您读短信，检测诈骗风险。", rate=0.85)
     with col_act2:
         if st.button("📒 记个账", key="act_account"):
             st.session_state.section = "account"
-            st.rerun()
+            generate_speech("好的，我来帮您记账，记录每一笔收支。", rate=0.85)
     with col_act3:
         if st.button("🆘 帮帮我！", key="act_help"):
             st.session_state.section = "help"
-            st.rerun()
+            generate_speech("别着急，我来帮您，这里有紧急求助电话。", rate=0.85)
     with col_act4:
         if st.button("🧠 练一练", key="act_quiz"):
             st.session_state.section = "quiz"
-            st.rerun()
+            generate_speech("好的，我们来练一练，学习防骗知识。", rate=0.85)
     st.markdown('</div>', unsafe_allow_html=True)
 
     # ====== 动态内容 ======
@@ -477,26 +461,17 @@ def main():
                         generate_speech(f"危险！检测到诈骗！涉及{cats}，关键词{','.join(kws[:3])}，请立即报警！", rate=0.85)
                         st.markdown(f"""
                         <div class="chat-bubble danger">
-                            <strong style="font-size:38px;">🚨 高度危险！</strong><br>
+                            <strong style="font-size:1.3em;">🚨 高度危险！</strong><br>
                             发现 <strong>{len(kws)}</strong> 个诈骗关键词：<br>
-                            <span style="background:#D97070;color:white;padding:6px 20px;border-radius:60px;font-size:32px;">{', '.join(kws)}</span><br>
-                            <strong style="font-size:40px;color:#C94D4D;">⚠️ 千万不要转账！</strong><br>
+                            <span style="background:#D97070;color:white;padding:6px 20px;border-radius:60px;">{', '.join(kws)}</span><br>
+                            <strong style="font-size:1.3em;color:#C94D4D;">⚠️ 千万不要转账！</strong><br>
                             📞 立即拨打 <strong>110</strong> 或联系子女、村委会！
-                        </div>
-                        """, unsafe_allow_html=True)
-                    elif risk == "medium":
-                        st.markdown(f"""
-                        <div class="chat-bubble warning">
-                            <strong style="font-size:34px;">⚠️ 存在可疑风险</strong><br>
-                            涉及：{', '.join(cats)}<br>
-                            关键词：{', '.join(kws)}<br>
-                            💡 建议咨询子女或村委会。
                         </div>
                         """, unsafe_allow_html=True)
                     else:
                         st.markdown("""
                         <div class="chat-bubble safe">
-                            <strong style="font-size:34px;">✅ 暂未发现风险</strong><br>
+                            <strong style="font-size:1.3em;">✅ 暂未发现风险</strong><br>
                             仍要记住：不轻信、不转账、不透露验证码。
                         </div>
                         """, unsafe_allow_html=True)
@@ -510,15 +485,15 @@ def main():
             case = random.choice(CASES)
             st.markdown(f"""
             <div style="background:rgba(255,248,240,0.6);border-radius:28px;padding:24px;border:1px solid #F0E4D8;">
-                <div style="font-size:34px;font-weight:700;color:#C4906A;">{case['title']}</div>
-                <div style="font-size:28px;color:#2C3E50;margin-top:8px;">{case['desc']}</div>
+                <div style="font-weight:700;color:#C4906A;">{case['title']}</div>
+                <div style="color:#2C3E50;margin-top:8px;">{case['desc']}</div>
             </div>
             """, unsafe_allow_html=True)
             if st.button("🔄 换一个故事"):
-                st.rerun()
+                pass
             st.markdown("""
             <div style="margin-top:16px;padding:18px;background:#E8F5E9;border-radius:28px;">
-                <p style="font-size:28px;">📞 <strong>反诈预警专线：96110</strong></p>
+                <p>📞 <strong>反诈预警专线：96110</strong></p>
             </div>
             """, unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
@@ -531,8 +506,8 @@ def main():
             st.markdown("#### 💰 记一笔")
             st.markdown(f"""
             <div style="background:linear-gradient(145deg,#4A3728,#5A4A3A);color:white;border-radius:36px;padding:20px 28px;text-align:center;margin-bottom:16px;">
-                <span style="font-size:30px;color:white;">💰 当前总资产</span><br>
-                <span style="font-size:58px;font-weight:900;color:white;">¥{balance:,.2f}</span>
+                <span style="color:white;">💰 当前总资产</span><br>
+                <span style="font-size:1.5em;font-weight:900;color:white;">¥{balance:,.2f}</span>
             </div>
             """, unsafe_allow_html=True)
             with st.form(key="acc_form", clear_on_submit=True):
@@ -560,7 +535,6 @@ def main():
                         profile['points'] = profile.get('points', 0) + 1
                         save_profile(profile)
                         st.success("✅ 保存成功！+1积分")
-                        st.rerun()
                     else:
                         st.warning("请填写完整")
             st.markdown('</div>', unsafe_allow_html=True)
@@ -575,12 +549,12 @@ def main():
                 st.markdown(f"""
                 <div style="display:flex;gap:16px;margin:12px 0;">
                     <div style="flex:1;background:#E8F5E9;border-radius:28px;padding:16px;text-align:center;">
-                        <span style="font-size:26px;">📈 今日收入</span><br>
-                        <span style="font-size:40px;font-weight:800;color:#82BE96;">+¥{today_in:.0f}</span>
+                        <span>📈 今日收入</span><br>
+                        <span style="font-size:1.4em;font-weight:800;color:#82BE96;">+¥{today_in:.0f}</span>
                     </div>
                     <div style="flex:1;background:#FDECEA;border-radius:28px;padding:16px;text-align:center;">
-                        <span style="font-size:26px;">📉 今日支出</span><br>
-                        <span style="font-size:40px;font-weight:800;color:#D97070;">-¥{today_out:.0f}</span>
+                        <span>📉 今日支出</span><br>
+                        <span style="font-size:1.4em;font-weight:800;color:#D97070;">-¥{today_out:.0f}</span>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
@@ -590,10 +564,10 @@ def main():
                     color = "#82BE96" if r["type"] == "收入" else "#D97070"
                     st.markdown(f"""
                     <div style="background:rgba(255,252,248,0.5);border-radius:24px;padding:16px 24px;margin:8px 0;border:1px solid #F0E8E0;">
-                        <span style="font-weight:bold;color:{color};font-size:30px;">{icon} {r['type']}</span>
-                        <span style="font-weight:bold;font-size:30px;">¥{r['amount']:.2f}</span>
-                        <span style="color:#5A4A3A;margin-left:12px;font-size:28px;">{r['desc']}</span>
-                        <span style="float:right;color:#8A7A6A;font-size:26px;">{r['date']}</span>
+                        <span style="font-weight:bold;color:{color};">{icon} {r['type']}</span>
+                        <span style="font-weight:bold;">¥{r['amount']:.2f}</span>
+                        <span style="color:#5A4A3A;margin-left:12px;">{r['desc']}</span>
+                        <span style="float:right;color:#8A7A6A;">{r['date']}</span>
                     </div>
                     """, unsafe_allow_html=True)
             else:
@@ -608,7 +582,7 @@ def main():
             st.markdown("#### 🆘 一键求助")
             st.markdown("""
             <div style="background:#FDF2E9;padding:24px;border-radius:36px;border:4px solid #E8A87C;text-align:center;margin-bottom:20px;">
-                <p style="font-size:34px;font-weight:800;color:#6A4A2A;">🚨 遇到可疑情况，<br>请立即停止操作！</p>
+                <p style="font-weight:800;color:#6A4A2A;">🚨 遇到可疑情况，<br>请立即停止操作！</p>
             </div>
             """, unsafe_allow_html=True)
             if st.button("📞 拨打 110", use_container_width=True):
@@ -627,29 +601,29 @@ def main():
             st.markdown("#### 👨‍👩‍👧‍👦 亲情连线")
             st.markdown("""
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-                <div style="background:white;border-radius:28px;padding:20px;text-align:center;border:1px solid #F0E8E0;transition:all 0.2s;">
-                    <div style="font-size:68px;">👨</div>
-                    <div style="font-size:32px;font-weight:700;">张小明</div>
-                    <div style="font-size:26px;">儿子</div>
-                    <div style="font-size:24px;color:#8A7A6A;">📞 138****1234</div>
+                <div style="background:white;border-radius:28px;padding:20px;text-align:center;border:1px solid #F0E8E0;">
+                    <div style="font-size:2em;">👨</div>
+                    <div style="font-weight:700;">张小明</div>
+                    <div>儿子</div>
+                    <div style="color:#8A7A6A;">📞 138****1234</div>
                 </div>
                 <div style="background:white;border-radius:28px;padding:20px;text-align:center;border:1px solid #F0E8E0;">
-                    <div style="font-size:68px;">👩</div>
-                    <div style="font-size:32px;font-weight:700;">李小芳</div>
-                    <div style="font-size:26px;">女儿</div>
-                    <div style="font-size:24px;color:#8A7A6A;">📞 139****5678</div>
+                    <div style="font-size:2em;">👩</div>
+                    <div style="font-weight:700;">李小芳</div>
+                    <div>女儿</div>
+                    <div style="color:#8A7A6A;">📞 139****5678</div>
                 </div>
                 <div style="background:white;border-radius:28px;padding:20px;text-align:center;border:1px solid #F0E8E0;">
-                    <div style="font-size:68px;">👴</div>
-                    <div style="font-size:32px;font-weight:700;">王村长</div>
-                    <div style="font-size:26px;">村主任</div>
-                    <div style="font-size:24px;color:#8A7A6A;">📞 137****9012</div>
+                    <div style="font-size:2em;">👴</div>
+                    <div style="font-weight:700;">王村长</div>
+                    <div>村主任</div>
+                    <div style="color:#8A7A6A;">📞 137****9012</div>
                 </div>
                 <div style="background:white;border-radius:28px;padding:20px;text-align:center;border:1px solid #F0E8E0;">
-                    <div style="font-size:68px;">👩‍⚕️</div>
-                    <div style="font-size:32px;font-weight:700;">李医生</div>
-                    <div style="font-size:26px;">村医</div>
-                    <div style="font-size:24px;color:#8A7A6A;">📞 136****3456</div>
+                    <div style="font-size:2em;">👩‍⚕️</div>
+                    <div style="font-weight:700;">李医生</div>
+                    <div>村医</div>
+                    <div style="color:#8A7A6A;">📞 136****3456</div>
                 </div>
             </div>
             """, unsafe_allow_html=True)
@@ -666,8 +640,8 @@ def main():
                 st.session_state.quiz_answered = False
                 st.session_state.quiz_selected = None
             quiz = QUIZZES[st.session_state.quiz_idx]
-            st.markdown(f'<p style="font-size:32px;font-weight:700;">第 {st.session_state.quiz_idx+1} / {len(QUIZZES)} 题</p>', unsafe_allow_html=True)
-            st.markdown(f'<p style="font-size:34px;">{quiz["q"]}</p>', unsafe_allow_html=True)
+            st.markdown(f'<p style="font-weight:700;">第 {st.session_state.quiz_idx+1} / {len(QUIZZES)} 题</p>', unsafe_allow_html=True)
+            st.markdown(f'<p>{quiz["q"]}</p>', unsafe_allow_html=True)
             for i, opt in enumerate(quiz["options"]):
                 if st.button(f"{chr(65+i)}. {opt}", key=f"quiz_{i}"):
                     st.session_state.quiz_selected = i
@@ -688,13 +662,11 @@ def main():
                     st.session_state.quiz_idx = (st.session_state.quiz_idx - 1) % len(QUIZZES)
                     st.session_state.quiz_answered = False
                     st.session_state.quiz_selected = None
-                    st.rerun()
             with col_qr:
                 if st.button("下一题 ➡️"):
                     st.session_state.quiz_idx = (st.session_state.quiz_idx + 1) % len(QUIZZES)
                     st.session_state.quiz_answered = False
                     st.session_state.quiz_selected = None
-                    st.rerun()
 
         with sub_s:
             st.markdown("#### 🎭 风险模拟器")
@@ -707,8 +679,8 @@ def main():
                 st.session_state.sim_answered = False
                 st.session_state.sim_selected = None
             sim = sim_scenes[st.session_state.sim_idx]
-            st.markdown(f'<p style="font-size:32px;font-weight:700;">场景 {st.session_state.sim_idx+1}</p>', unsafe_allow_html=True)
-            st.markdown(f'<p style="font-size:34px;background:#F5ECE4;padding:24px;border-radius:36px;">{sim["q"]}</p>', unsafe_allow_html=True)
+            st.markdown(f'<p style="font-weight:700;">场景 {st.session_state.sim_idx+1}</p>', unsafe_allow_html=True)
+            st.markdown(f'<p style="background:#F5ECE4;padding:24px;border-radius:36px;">{sim["q"]}</p>', unsafe_allow_html=True)
             for i, opt in enumerate(sim["options"]):
                 if st.button(f"{chr(65+i)}. {opt}", key=f"sim_{i}"):
                     st.session_state.sim_selected = i
@@ -728,31 +700,28 @@ def main():
                     st.session_state.sim_idx = (st.session_state.sim_idx - 1) % len(sim_scenes)
                     st.session_state.sim_answered = False
                     st.session_state.sim_selected = None
-                    st.rerun()
             with col_sr:
                 if st.button("下一场景 ➡️"):
                     st.session_state.sim_idx = (st.session_state.sim_idx + 1) % len(sim_scenes)
                     st.session_state.sim_answered = False
                     st.session_state.sim_selected = None
-                    st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 
-
-    # ====== B站视频自动循环播放 ======
+    # ====== B站视频（默认暂停，不自动播放） ======
     st.markdown('''
     <div class="glass-card">
         <h4>🎬 反诈宣传视频</h4>
         <iframe 
-            src="https://player.bilibili.com/player.html?bvid=BV1vN4y1N7CG&autoplay=1&loop=1" 
+            src="https://player.bilibili.com/player.html?bvid=BV1vN4y1N7CG&loop=1" 
             scrolling="no" 
             border="0" 
             frameborder="no" 
             framespacing="0" 
             allowfullscreen="true"
-            allow="autoplay; encrypted-media; fullscreen"
+            allow="encrypted-media; fullscreen"
             style="width:100%; height:500px; border-radius:20px; background:#000;">
         </iframe>
-        <p style="font-size:20px; color:#8A7A6A; margin-top:10px;">📺 视频来源：B站 · 反诈宣传</p>
+        <p style="color:#8A7A6A; margin-top:10px;">📺 视频来源：B站 · 反诈宣传</p>
     </div>
     ''', unsafe_allow_html=True)
 
@@ -772,8 +741,8 @@ def main():
         with cols[idx % 3]:
             st.markdown(f"""
             <div class="fraud-type">
-                <div class="title" style="font-size:30px;">🔸 {name}</div>
-                <div class="desc" style="font-size:26px;">{desc}</div>
+                <div class="title">🔸 {name}</div>
+                <div class="desc">{desc}</div>
             </div>
             """, unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
@@ -786,7 +755,7 @@ def main():
         "免费体检别轻信，特效药品是陷阱。\n养老钱要管住，问问子女再决定。",
         "中奖短信不要点，天上不会掉馅饼。\n96110 要记牢，反诈中心守护您。"
     ])
-    st.markdown(f'<p style="font-size:42px;font-weight:700;color:#2C3E50;text-align:center;white-space:pre-wrap;">{rhyme}</p>', unsafe_allow_html=True)
+    st.markdown(f'<p style="text-align:center;white-space:pre-wrap;">{rhyme}</p>', unsafe_allow_html=True)
     if st.button("🔊 播放顺口溜", use_container_width=True):
         generate_speech(rhyme.replace('\n', '。'), rate=0.85)
         st.success("已播放！")
@@ -797,7 +766,7 @@ def main():
     st.markdown("#### 📚 防骗小贴士（点击展开学习）")
     for q, a in KNOWLEDGE.items():
         with st.expander(q):
-            st.markdown(f'<p style="font-size:30px;">{a}</p>', unsafe_allow_html=True)
+            st.markdown(f'<p>{a}</p>', unsafe_allow_html=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
     # ====== 数据看板 ======
@@ -807,13 +776,13 @@ def main():
     total_in = sum(r["amount"] for r in records if r["type"] == "收入")
     total_out = sum(r["amount"] for r in records if r["type"] == "支出")
     with col_s1:
-        st.markdown(f'<p style="text-align:center;"><span style="font-size:48px;font-weight:900;color:#D4A574;">{len(records)}</span><br><span style="font-size:24px;">📝 总笔数</span></p>', unsafe_allow_html=True)
+        st.markdown(f'<p style="text-align:center;"><span style="font-size:1.5em;font-weight:900;color:#D4A574;">{len(records)}</span><br>📝 总笔数</p>', unsafe_allow_html=True)
     with col_s2:
-        st.markdown(f'<p style="text-align:center;"><span style="font-size:48px;font-weight:900;color:#82BE96;">¥{total_in:,.0f}</span><br><span style="font-size:24px;">📈 总收入</span></p>', unsafe_allow_html=True)
+        st.markdown(f'<p style="text-align:center;"><span style="font-size:1.5em;font-weight:900;color:#82BE96;">¥{total_in:,.0f}</span><br>📈 总收入</p>', unsafe_allow_html=True)
     with col_s3:
-        st.markdown(f'<p style="text-align:center;"><span style="font-size:48px;font-weight:900;color:#D97070;">¥{total_out:,.0f}</span><br><span style="font-size:24px;">📉 总支出</span></p>', unsafe_allow_html=True)
+        st.markdown(f'<p style="text-align:center;"><span style="font-size:1.5em;font-weight:900;color:#D97070;">¥{total_out:,.0f}</span><br>📉 总支出</p>', unsafe_allow_html=True)
     with col_s4:
-        st.markdown(f'<p style="text-align:center;"><span style="font-size:48px;font-weight:900;color:#E8A87C;">{len(records)}</span><br><span style="font-size:24px;">📅 守护天数</span></p>', unsafe_allow_html=True)
+        st.markdown(f'<p style="text-align:center;"><span style="font-size:1.5em;font-weight:900;color:#E8A87C;">{len(records)}</span><br>📅 守护天数</p>', unsafe_allow_html=True)
 
     if len(records) >= 3:
         try:
@@ -843,9 +812,9 @@ def main():
     # ====== 底部 ======
     st.markdown("""
     <div class="footer">
-        <p style="font-size:26px;">🏡 银乡智护 · 农村老年金融反诈公益项目</p>
-        <p style="font-size:24px;">❤️ 完全免费 · 无需注册 · 守护乡村养老钱</p>
-        <p style="font-size:22px;">🔒 数据仅保存在本地，不上传服务器</p>
+        <p>🏡 银乡智护 · 农村老年金融反诈公益项目</p>
+        <p>❤️ 完全免费 · 无需注册 · 守护乡村养老钱</p>
+        <p>🔒 数据仅保存在本地，不上传服务器</p>
     </div>
     """, unsafe_allow_html=True)
 
