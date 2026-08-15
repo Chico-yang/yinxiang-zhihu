@@ -705,7 +705,7 @@ def main():
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.markdown("#### 🖼️ 今日反诈海报")
     poster = generate_poster()
-    st.image(poster, use_column_width=True)
+    st.image(poster, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
 
     # 骗局类型展示
